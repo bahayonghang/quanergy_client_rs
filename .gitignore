@@ -1,0 +1,13 @@
+# planning with files
+task_plan.md
+findings.md
+progress.md
+
+.agents/
+.claude/
+.codex/
+.trellis/
+
+ref/
+
+target/

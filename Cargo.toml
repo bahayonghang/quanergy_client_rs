@@ -1,0 +1,31 @@
+[package]
+name = "quanergy-client"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Rust rewrite of the Quanergy client SDK visualizer and packet pipeline"
+license = "MIT"
+
+[lib]
+name = "quanergy_client"
+path = "src/lib.rs"
+
+[[bin]]
+name = "quanergy-client"
+path = "src/main.rs"
+
+[dependencies]
+byteorder = "1.5"
+clap = { version = "4.6.1", features = ["derive"] }
+quick-xml = "0.40.1"
+rerun = "0.33.0"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+time = { version = "0.3", features = ["formatting", "local-offset", "macros", "serde"] }
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+ureq = "3.1"
+
+[dev-dependencies]
+tempfile = "3.23"
