@@ -1,4 +1,6 @@
 use std::{
+    env,
+    ffi::{OsStr, OsString},
     io::{self, Write},
     path::PathBuf,
     sync::{
@@ -20,6 +22,9 @@ use quanergy_client::{
 };
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
+
+const DEFAULT_COMMAND: &str = "visualizer";
+const DEFAULT_VISUALIZER_SUBCOMMAND: &str = "live";
 
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
@@ -135,16 +140,90 @@ struct RecordArgs {
     output: PathBuf,
 }
 
+#[derive(Debug)]
+struct Launch {
+    cli: Cli,
+    pause_on_missing_host: bool,
+}
+
 fn main() {
-    if let Err(error) = run() {
+    let launch = match parse_launch_from(env::args_os()) {
+        Ok(launch) => launch,
+        Err(error) => error.exit(),
+    };
+
+    init_logging(launch.cli.verbose);
+    if let Err(error) = run(launch.cli) {
         eprintln!("Error: {error}");
+        if launch.pause_on_missing_host && is_missing_host_error(&error) {
+            pause_for_enter();
+        }
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<()> {
-    let cli = Cli::parse();
-    init_logging(cli.verbose);
+fn parse_launch_from<I, T>(args: I) -> std::result::Result<Launch, clap::Error>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString>,
+{
+    let args: Vec<OsString> = args.into_iter().map(Into::into).collect();
+    let no_user_args = args.len() == 1;
+    let (args, defaulted_to_live) = default_visualizer_live_args(args);
+    Ok(Launch {
+        cli: Cli::try_parse_from(args)?,
+        pause_on_missing_host: no_user_args && defaulted_to_live,
+    })
+}
+
+fn default_visualizer_live_args(mut args: Vec<OsString>) -> (Vec<OsString>, bool) {
+    if args.is_empty() || requests_root_metadata(&args[1..]) || has_explicit_subcommand(&args[1..])
+    {
+        return (args, false);
+    }
+
+    args.insert(1, OsString::from(DEFAULT_COMMAND));
+    args.insert(2, OsString::from(DEFAULT_VISUALIZER_SUBCOMMAND));
+    (args, true)
+}
+
+fn requests_root_metadata(args: &[OsString]) -> bool {
+    for arg in args {
+        if is_global_flag(arg, "verbose") || is_global_flag(arg, "strict") {
+            continue;
+        }
+        return is_help_or_version(arg);
+    }
+    false
+}
+
+fn has_explicit_subcommand(args: &[OsString]) -> bool {
+    for arg in args {
+        if is_global_flag(arg, "verbose") || is_global_flag(arg, "strict") {
+            continue;
+        }
+        if arg.to_string_lossy().starts_with('-') {
+            return false;
+        }
+        return is_subcommand(arg);
+    }
+    false
+}
+
+fn is_global_flag(arg: &OsStr, name: &str) -> bool {
+    let long = format!("--{name}");
+    arg == long.as_str()
+}
+
+fn is_help_or_version(arg: &OsStr) -> bool {
+    arg == "--help" || arg == "-h" || arg == "--version" || arg == "-V"
+}
+
+fn is_subcommand(arg: &OsStr) -> bool {
+    arg == DEFAULT_COMMAND || arg == "record" || arg == "dynamic-connection" || arg == "help"
+}
+
+fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Visualizer(command) => match command.command {
             VisualizerSubcommand::Live(args) => run_visualizer_live(args, cli.strict),
@@ -362,10 +441,35 @@ fn enrich_from_device_info(config: &mut PipelineConfig) -> Result<()> {
 
 fn require_host(config: &PipelineConfig) -> Result<String> {
     if config.host.is_empty() {
-        Err(QuanergyError::Config("no host provided".to_owned()))
+        Err(QuanergyError::Config(missing_host_message()))
     } else {
         Ok(config.host.clone())
     }
+}
+
+fn missing_host_message() -> String {
+    [
+        "no host provided",
+        "",
+        "Provide a sensor host, for example:",
+        "  quanergy-client.exe --host <SENSOR_IP>",
+        "  quanergy-client.exe visualizer live --host <SENSOR_IP>",
+        "  quanergy-client.exe visualizer live --settings-file <client.xml>",
+        "",
+        "For record or dynamic-connection, pass --host to that command.",
+    ]
+    .join("\n")
+}
+
+fn is_missing_host_error(error: &QuanergyError) -> bool {
+    matches!(error, QuanergyError::Config(message) if message.starts_with("no host provided"))
+}
+
+fn pause_for_enter() {
+    eprint!("Press Enter to close this window...");
+    let _ = io::stderr().flush();
+    let mut input = String::new();
+    let _ = io::stdin().read_line(&mut input);
 }
 
 fn visualizer_config(args: &RerunArgs) -> VisualizerConfig {
@@ -420,5 +524,67 @@ fn stop_worker(
         }
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::error::ErrorKind;
+
+    use super::*;
+
+    #[test]
+    fn no_args_default_to_visualizer_live_and_pause_on_missing_host() {
+        let launch = parse_launch_from(["quanergy-client"]).unwrap();
+        assert!(launch.pause_on_missing_host);
+
+        let error = run(launch.cli).unwrap_err();
+        assert!(is_missing_host_error(&error));
+        assert!(error.to_string().contains("quanergy-client.exe --host"));
+    }
+
+    #[test]
+    fn top_level_host_defaults_to_visualizer_live_without_pause() {
+        let launch = parse_launch_from(["quanergy-client", "--host", "192.0.2.10"]).unwrap();
+        assert!(!launch.pause_on_missing_host);
+
+        match launch.cli.command {
+            Command::Visualizer(command) => match command.command {
+                VisualizerSubcommand::Live(args) => {
+                    assert_eq!(args.common.host.as_deref(), Some("192.0.2.10"));
+                }
+                VisualizerSubcommand::Replay(_) => panic!("expected live visualizer"),
+            },
+            Command::Record(_) | Command::DynamicConnection(_) => panic!("expected visualizer"),
+        }
+    }
+
+    #[test]
+    fn explicit_visualizer_live_is_not_marked_as_double_click_launch() {
+        let launch = parse_launch_from(["quanergy-client", "visualizer", "live"]).unwrap();
+        assert!(!launch.pause_on_missing_host);
+
+        match launch.cli.command {
+            Command::Visualizer(command) => match command.command {
+                VisualizerSubcommand::Live(_) => {}
+                VisualizerSubcommand::Replay(_) => panic!("expected live visualizer"),
+            },
+            Command::Record(_) | Command::DynamicConnection(_) => panic!("expected visualizer"),
+        }
+    }
+
+    #[test]
+    fn root_help_stays_root_help() {
+        let error = parse_launch_from(["quanergy-client", "--help"]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::DisplayHelp);
+    }
+
+    #[test]
+    fn explicit_visualizer_without_nested_command_still_errors() {
+        let error = parse_launch_from(["quanergy-client", "visualizer"]).unwrap_err();
+        assert_eq!(
+            error.kind(),
+            ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+        );
     }
 }
