@@ -12,6 +12,15 @@ dev:
     cargo check --all-targets --all-features
     cargo test --all-targets --all-features
 
+docs:
+    npm --prefix docs run docs:dev
+
+docs-build:
+    npm --prefix docs run docs:build
+
+docs-preview:
+    npm --prefix docs run docs:preview
+
 build:
     cargo build
 
