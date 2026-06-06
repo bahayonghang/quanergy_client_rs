@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use crate::{
-    cloud::{Frame, PointXyzir},
-    error::{QuanergyError, Result},
-};
+use quanergy_client::cloud::{Frame, PointXyzir};
+
+use crate::{Result, VisualizerError};
 
 #[derive(Debug, Clone, Default)]
 pub enum RerunOutput {
@@ -44,13 +43,13 @@ impl RerunSink {
             match &config.output {
                 RerunOutput::Spawn => builder
                     .spawn()
-                    .map_err(|error| QuanergyError::Visualizer(error.to_string()))?,
+                    .map_err(|error| VisualizerError::Rerun(error.to_string()))?,
                 RerunOutput::Connect(addr) => builder
                     .connect_grpc_opts(normalize_connect_addr(addr))
-                    .map_err(|error| QuanergyError::Visualizer(error.to_string()))?,
+                    .map_err(|error| VisualizerError::Rerun(error.to_string()))?,
                 RerunOutput::Save(path) => builder
                     .save(path)
-                    .map_err(|error| QuanergyError::Visualizer(error.to_string()))?,
+                    .map_err(|error| VisualizerError::Rerun(error.to_string()))?,
             };
 
         Ok(Self {
@@ -69,7 +68,7 @@ impl RerunSink {
     pub fn flush_blocking(&self) -> Result<()> {
         self.rec
             .flush_blocking()
-            .map_err(|error| QuanergyError::Visualizer(error.to_string()))
+            .map_err(|error| VisualizerError::Rerun(error.to_string()))
     }
 }
 
@@ -95,7 +94,7 @@ impl VisualizerSink for RerunSink {
                 format!("{}/points", frame.frame_id),
                 &rerun::Points3D::new(points).with_colors(colors),
             )
-            .map_err(|error| QuanergyError::Visualizer(error.to_string()))?;
+            .map_err(|error| VisualizerError::Rerun(error.to_string()))?;
         Ok(())
     }
 }

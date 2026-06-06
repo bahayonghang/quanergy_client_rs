@@ -6,8 +6,8 @@ use quanergy_client::{
     pipeline::SensorPipeline,
     protocol::{PacketHeader, HEADER_LEN, PACKET_TYPE_HVDIR_LIST, SIGNATURE},
     replay::{QrawReader, QrawWriter},
-    visualizer::{RerunSink, VisualizerSink},
 };
+use visualizer::rerun_sink::{RerunSink, VisualizerSink};
 
 #[test]
 fn replay_visualizer_saves_nonempty_rrd() {

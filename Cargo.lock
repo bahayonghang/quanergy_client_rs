@@ -6189,16 +6189,12 @@ name = "quanergy-client"
 version = "0.1.0"
 dependencies = [
  "byteorder",
- "clap",
  "quick-xml 0.40.1",
- "rerun",
  "serde",
- "tempfile",
  "thiserror 2.0.18",
  "time",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
- "tracing-subscriber",
  "ureq",
 ]
 
@@ -10611,6 +10607,19 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "visualizer"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "clap",
+ "quanergy-client",
+ "rerun",
+ "thiserror 2.0.18",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "walkdir"

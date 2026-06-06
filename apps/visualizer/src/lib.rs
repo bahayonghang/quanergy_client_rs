@@ -2,29 +2,41 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     io::{self, Write},
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread,
+    path::{Path, PathBuf},
     time::Duration,
 };
 
 use clap::{Args, Parser, Subcommand};
 use quanergy_client::{
     config::{DeviceInfo, EncoderMode, PipelineConfig},
-    error::{QuanergyError, Result},
+    error::QuanergyError,
     net::{fetch_device_info_xml, TcpPacketSource},
     pipeline::SensorPipeline,
     replay::{QrawReader, QrawWriter, SidecarMetadata},
-    visualizer::{RerunOutput, RerunSink, VisualizerConfig, VisualizerSink},
 };
-use tracing::{info, warn};
+use thiserror::Error;
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
-const DEFAULT_COMMAND: &str = "visualizer";
-const DEFAULT_VISUALIZER_SUBCOMMAND: &str = "live";
+pub mod rerun_sink;
+
+use rerun_sink::{RerunOutput, RerunSink, VisualizerConfig, VisualizerSink};
+
+const DEFAULT_COMMAND: &str = "live";
+
+pub type Result<T> = std::result::Result<T, VisualizerError>;
+
+#[derive(Debug, Error)]
+pub enum VisualizerError {
+    #[error("{0}")]
+    Quanergy(#[from] QuanergyError),
+
+    #[error("visualizer error: {0}")]
+    Rerun(String),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+}
 
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
@@ -41,21 +53,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    Visualizer(VisualizerCommand),
-    Record(RecordArgs),
-    DynamicConnection(CommonArgs),
-}
-
-#[derive(Debug, Args)]
-struct VisualizerCommand {
-    #[command(subcommand)]
-    command: VisualizerSubcommand,
-}
-
-#[derive(Debug, Subcommand)]
-enum VisualizerSubcommand {
     Live(LiveVisualizerArgs),
     Replay(ReplayVisualizerArgs),
+    Record(RecordArgs),
 }
 
 #[derive(Debug, Args, Clone)]
@@ -146,7 +146,7 @@ struct Launch {
     pause_on_missing_host: bool,
 }
 
-fn main() {
+pub fn main_entry() {
     let launch = match parse_launch_from(env::args_os()) {
         Ok(launch) => launch,
         Err(error) => error.exit(),
@@ -169,21 +169,20 @@ where
 {
     let args: Vec<OsString> = args.into_iter().map(Into::into).collect();
     let no_user_args = args.len() == 1;
-    let (args, defaulted_to_live) = default_visualizer_live_args(args);
+    let (args, defaulted_to_live) = default_live_args(args);
     Ok(Launch {
         cli: Cli::try_parse_from(args)?,
         pause_on_missing_host: no_user_args && defaulted_to_live,
     })
 }
 
-fn default_visualizer_live_args(mut args: Vec<OsString>) -> (Vec<OsString>, bool) {
-    if args.is_empty() || requests_root_metadata(&args[1..]) || has_explicit_subcommand(&args[1..])
+fn default_live_args(mut args: Vec<OsString>) -> (Vec<OsString>, bool) {
+    if args.is_empty() || requests_root_metadata(&args[1..]) || !should_default_to_live(&args[1..])
     {
         return (args, false);
     }
 
     args.insert(1, OsString::from(DEFAULT_COMMAND));
-    args.insert(2, OsString::from(DEFAULT_VISUALIZER_SUBCOMMAND));
     (args, true)
 }
 
@@ -197,17 +196,21 @@ fn requests_root_metadata(args: &[OsString]) -> bool {
     false
 }
 
-fn has_explicit_subcommand(args: &[OsString]) -> bool {
+fn should_default_to_live(args: &[OsString]) -> bool {
+    if args.is_empty() {
+        return true;
+    }
+
     for arg in args {
         if is_global_flag(arg, "verbose") || is_global_flag(arg, "strict") {
             continue;
         }
         if arg.to_string_lossy().starts_with('-') {
-            return false;
+            return true;
         }
-        return is_subcommand(arg);
+        return false;
     }
-    false
+    true
 }
 
 fn is_global_flag(arg: &OsStr, name: &str) -> bool {
@@ -219,18 +222,11 @@ fn is_help_or_version(arg: &OsStr) -> bool {
     arg == "--help" || arg == "-h" || arg == "--version" || arg == "-V"
 }
 
-fn is_subcommand(arg: &OsStr) -> bool {
-    arg == DEFAULT_COMMAND || arg == "record" || arg == "dynamic-connection" || arg == "help"
-}
-
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        Command::Visualizer(command) => match command.command {
-            VisualizerSubcommand::Live(args) => run_visualizer_live(args, cli.strict),
-            VisualizerSubcommand::Replay(args) => run_visualizer_replay(args, cli.strict),
-        },
+        Command::Live(args) => run_visualizer_live(args, cli.strict),
+        Command::Replay(args) => run_visualizer_replay(args, cli.strict),
         Command::Record(args) => run_record(args, cli.strict),
-        Command::DynamicConnection(args) => run_dynamic_connection(args, cli.strict),
     }
 }
 
@@ -311,68 +307,6 @@ fn run_record(args: RecordArgs, strict: bool) -> Result<()> {
     }
 }
 
-fn run_dynamic_connection(args: CommonArgs, strict: bool) -> Result<()> {
-    let mut config = build_config(&args, strict)?;
-    let _ = enrich_from_device_info(&mut config);
-    let host = require_host(&config)?;
-    let mut cloud_count = 0u64;
-    let mut worker: Option<thread::JoinHandle<Result<u64>>> = None;
-    let mut stop_flag: Option<Arc<AtomicBool>> = None;
-
-    loop {
-        print!("Enter 'run' to connect, 'stop' to disconnect, or 'exit' to exit the program: ");
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        match input.trim() {
-            "run" => {
-                if worker.is_some() {
-                    println!("already running");
-                    continue;
-                }
-                info!(%host, "connecting");
-                let worker_host = host.clone();
-                let worker_config = config.clone();
-                let stop = Arc::new(AtomicBool::new(false));
-                let worker_stop = Arc::clone(&stop);
-                worker = Some(thread::spawn(move || {
-                    let mut source = TcpPacketSource::connect(&worker_host)?;
-                    let mut pipeline = SensorPipeline::new(worker_config)?;
-                    let mut local_cloud_count = 0u64;
-                    while !worker_stop.load(Ordering::Relaxed) {
-                        let packet = match source.next_packet() {
-                            Ok(packet) => packet,
-                            Err(error) if worker_stop.load(Ordering::Relaxed) => {
-                                warn!(%error, "dynamic connection stopped while reading packet");
-                                break;
-                            }
-                            Err(error) => return Err(error),
-                        };
-                        for _frame in pipeline.process_raw(&packet)? {
-                            local_cloud_count += 1;
-                            if local_cloud_count % 100 == 0 {
-                                println!("clouds received: {local_cloud_count}");
-                            }
-                        }
-                    }
-                    Ok(local_cloud_count)
-                }));
-                stop_flag = Some(stop);
-            }
-            "stop" => {
-                stop_worker(&mut worker, &mut stop_flag, &mut cloud_count)?;
-                info!("stopped");
-            }
-            "exit" => {
-                stop_worker(&mut worker, &mut stop_flag, &mut cloud_count)?;
-                break;
-            }
-            other => println!("Input ({other}) doesn't match any accepted option"),
-        }
-    }
-    Ok(())
-}
-
 fn build_config(args: &CommonArgs, strict: bool) -> Result<PipelineConfig> {
     let mut config = PipelineConfig {
         strict,
@@ -398,7 +332,8 @@ fn build_config(args: &CommonArgs, strict: bool) -> Result<PipelineConfig> {
         if values.len() != 2 {
             return Err(QuanergyError::Config(
                 "manual encoder correction expects exactly 2 parameters".to_owned(),
-            ));
+            )
+            .into());
         }
         config.encoder_mode = EncoderMode::Manual {
             amplitude: values[0],
@@ -434,14 +369,14 @@ fn enrich_from_device_info(config: &mut PipelineConfig) -> Result<()> {
         }
         Err(error) => {
             warn!(%error, "deviceInfo unavailable; continuing with configured/default calibration");
-            Err(error)
+            Err(error.into())
         }
     }
 }
 
 fn require_host(config: &PipelineConfig) -> Result<String> {
     if config.host.is_empty() {
-        Err(QuanergyError::Config(missing_host_message()))
+        Err(QuanergyError::Config(missing_host_message()).into())
     } else {
         Ok(config.host.clone())
     }
@@ -452,17 +387,20 @@ fn missing_host_message() -> String {
         "no host provided",
         "",
         "Provide a sensor host, for example:",
-        "  quanergy-client.exe --host <SENSOR_IP>",
-        "  quanergy-client.exe visualizer live --host <SENSOR_IP>",
-        "  quanergy-client.exe visualizer live --settings-file <client.xml>",
-        "",
-        "For record or dynamic-connection, pass --host to that command.",
+        "  visualizer --host <SENSOR_IP>",
+        "  visualizer live --host <SENSOR_IP>",
+        "  visualizer live --settings-file <client.xml>",
+        "  visualizer record --host <SENSOR_IP> <OUTPUT>",
     ]
     .join("\n")
 }
 
-fn is_missing_host_error(error: &QuanergyError) -> bool {
-    matches!(error, QuanergyError::Config(message) if message.starts_with("no host provided"))
+fn is_missing_host_error(error: &VisualizerError) -> bool {
+    matches!(
+        error,
+        VisualizerError::Quanergy(QuanergyError::Config(message))
+            if message.starts_with("no host provided")
+    )
 }
 
 fn pause_for_enter() {
@@ -487,7 +425,7 @@ fn visualizer_config(args: &RerunArgs) -> VisualizerConfig {
 }
 
 fn write_sidecar(
-    path: &PathBuf,
+    path: &Path,
     host: Option<String>,
     config: &PipelineConfig,
     error: Option<String>,
@@ -502,31 +440,6 @@ fn write_sidecar(
     }
 }
 
-fn stop_worker(
-    worker: &mut Option<thread::JoinHandle<Result<u64>>>,
-    stop_flag: &mut Option<Arc<AtomicBool>>,
-    cloud_count: &mut u64,
-) -> Result<()> {
-    if let Some(flag) = stop_flag.take() {
-        flag.store(true, Ordering::Relaxed);
-    }
-
-    if let Some(handle) = worker.take() {
-        match handle.join() {
-            Ok(Ok(count)) => {
-                *cloud_count += count;
-                Ok(())
-            }
-            Ok(Err(error)) => Err(error),
-            Err(_) => Err(QuanergyError::Config(
-                "dynamic connection worker panicked".to_owned(),
-            )),
-        }
-    } else {
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use clap::error::ErrorKind;
@@ -534,57 +447,69 @@ mod tests {
     use super::*;
 
     #[test]
-    fn no_args_default_to_visualizer_live_and_pause_on_missing_host() {
-        let launch = parse_launch_from(["quanergy-client"]).unwrap();
+    fn no_args_default_to_live_and_pause_on_missing_host() {
+        let launch = parse_launch_from(["visualizer"]).unwrap();
         assert!(launch.pause_on_missing_host);
 
         let error = run(launch.cli).unwrap_err();
         assert!(is_missing_host_error(&error));
-        assert!(error.to_string().contains("quanergy-client.exe --host"));
+        assert!(error.to_string().contains("visualizer --host"));
     }
 
     #[test]
-    fn top_level_host_defaults_to_visualizer_live_without_pause() {
-        let launch = parse_launch_from(["quanergy-client", "--host", "192.0.2.10"]).unwrap();
+    fn top_level_host_defaults_to_live_without_pause() {
+        let launch = parse_launch_from(["visualizer", "--host", "192.0.2.10"]).unwrap();
         assert!(!launch.pause_on_missing_host);
 
         match launch.cli.command {
-            Command::Visualizer(command) => match command.command {
-                VisualizerSubcommand::Live(args) => {
-                    assert_eq!(args.common.host.as_deref(), Some("192.0.2.10"));
-                }
-                VisualizerSubcommand::Replay(_) => panic!("expected live visualizer"),
-            },
-            Command::Record(_) | Command::DynamicConnection(_) => panic!("expected visualizer"),
+            Command::Live(args) => {
+                assert_eq!(args.common.host.as_deref(), Some("192.0.2.10"));
+            }
+            Command::Replay(_) | Command::Record(_) => panic!("expected live visualizer"),
         }
     }
 
     #[test]
-    fn explicit_visualizer_live_is_not_marked_as_double_click_launch() {
-        let launch = parse_launch_from(["quanergy-client", "visualizer", "live"]).unwrap();
+    fn explicit_live_is_not_marked_as_double_click_launch() {
+        let launch = parse_launch_from(["visualizer", "live"]).unwrap();
         assert!(!launch.pause_on_missing_host);
 
         match launch.cli.command {
-            Command::Visualizer(command) => match command.command {
-                VisualizerSubcommand::Live(_) => {}
-                VisualizerSubcommand::Replay(_) => panic!("expected live visualizer"),
-            },
-            Command::Record(_) | Command::DynamicConnection(_) => panic!("expected visualizer"),
+            Command::Live(_) => {}
+            Command::Replay(_) | Command::Record(_) => panic!("expected live visualizer"),
+        }
+    }
+
+    #[test]
+    fn record_command_owns_qraw_capture() {
+        let launch =
+            parse_launch_from(["visualizer", "record", "--host", "192.0.2.10", "out.qraw"])
+                .unwrap();
+
+        match launch.cli.command {
+            Command::Record(args) => {
+                assert_eq!(args.common.host.as_deref(), Some("192.0.2.10"));
+                assert_eq!(args.output, PathBuf::from("out.qraw"));
+            }
+            Command::Live(_) | Command::Replay(_) => panic!("expected record command"),
         }
     }
 
     #[test]
     fn root_help_stays_root_help() {
-        let error = parse_launch_from(["quanergy-client", "--help"]).unwrap_err();
+        let error = parse_launch_from(["visualizer", "--help"]).unwrap_err();
         assert_eq!(error.kind(), ErrorKind::DisplayHelp);
     }
 
     #[test]
-    fn explicit_visualizer_without_nested_command_still_errors() {
-        let error = parse_launch_from(["quanergy-client", "visualizer"]).unwrap_err();
-        assert_eq!(
-            error.kind(),
-            ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
-        );
+    fn old_nested_visualizer_command_is_not_supported() {
+        let error = parse_launch_from(["visualizer", "visualizer", "live"]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidSubcommand);
+    }
+
+    #[test]
+    fn dynamic_connection_is_not_part_of_visualizer_app() {
+        let error = parse_launch_from(["visualizer", "dynamic-connection"]).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::InvalidSubcommand);
     }
 }

@@ -63,7 +63,4 @@ pub enum QuanergyError {
 
     #[error("HTTP error: {0}")]
     Http(String),
-
-    #[error("visualizer error: {0}")]
-    Visualizer(String),
 }

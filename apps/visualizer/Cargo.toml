@@ -1,0 +1,26 @@
+[package]
+name = "visualizer"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Quanergy point cloud visualizer application"
+license.workspace = true
+
+[dependencies]
+clap = { version = "4.6.1", features = ["derive"] }
+quanergy-client = { path = "../../crates/quanergy-client" }
+rerun = "0.33.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[lib]
+name = "visualizer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "visualizer"
+path = "src/main.rs"
+
+[dev-dependencies]
+byteorder = "1.5"

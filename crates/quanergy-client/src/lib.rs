@@ -14,7 +14,6 @@ pub mod net;
 pub mod pipeline;
 pub mod protocol;
 pub mod replay;
-pub mod visualizer;
 
 pub use cloud::{Frame, PointHvdir, PointXyzir};
 pub use error::{QuanergyError, Result};
