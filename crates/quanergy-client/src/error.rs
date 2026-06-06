@@ -49,6 +49,12 @@ pub enum QuanergyError {
     #[error("replay format error: {0}")]
     ReplayFormat(String),
 
+    #[error("storage format error: {0}")]
+    StorageFormat(String),
+
+    #[error("coordinate transform error: {0}")]
+    Transform(String),
+
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
@@ -60,6 +66,12 @@ pub enum QuanergyError {
 
     #[error("TOML serialize error: {0}")]
     TomlSer(#[from] toml::ser::Error),
+
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    #[error("SQLite error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
 
     #[error("HTTP error: {0}")]
     Http(String),

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/quanergy-client",
+    "apps/capture-store",
     "apps/visualizer",
 ]
 resolver = "2"
