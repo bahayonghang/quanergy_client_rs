@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-06-06
+- **Total Sessions**: 7
+- **Last Active**: 2026-06-25
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~207 | Active |
+| `journal-1.md` | ~240 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-06-25 | Bootstrap project development guidelines | `408281f` | `main` |
 | 6 | 2026-06-06 | VitePress Docs | `b3ef012` | `main` |
 | 5 | 2026-06-06 | Tamping station point cloud storage | `8004941` | `main` |
 | 4 | 2026-06-06 | Reorganize quanergy client modules | `d99467c` | `main` |

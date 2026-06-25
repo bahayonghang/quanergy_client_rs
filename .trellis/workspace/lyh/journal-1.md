@@ -205,3 +205,36 @@ Created bilingual VitePress docs under docs/, scoped Node metadata to docs/packa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Bootstrap project development guidelines
+
+**Date**: 2026-06-25
+**Task**: Bootstrap project development guidelines
+**Branch**: `main`
+
+### Summary
+
+Filled backend error-handling, logging, and quality guidelines from real codebase patterns (error.rs, net.rs, pipeline/mod.rs, capture-store, visualizer). Marked inapplicable frontend spec templates as N/A. Completed PRD checklist for 00-bootstrap-guidelines.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `408281f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
