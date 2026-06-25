@@ -1,15 +1,22 @@
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use quanergy_client::cloud::{Frame, PointXyzir};
+use tracing::warn;
 
 use crate::{Result, VisualizerError};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub enum RerunOutput {
-    #[default]
-    Spawn,
+    Spawn(Option<PathBuf>),
     Connect(String),
     Save(PathBuf),
+}
+
+impl Default for RerunOutput {
+    fn default() -> Self {
+        RerunOutput::Spawn(None)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -21,7 +28,7 @@ pub struct VisualizerConfig {
 impl Default for VisualizerConfig {
     fn default() -> Self {
         Self {
-            output: RerunOutput::Spawn,
+            output: RerunOutput::Spawn(None),
             max_points: 300_000,
         }
     }
@@ -38,18 +45,43 @@ pub struct RerunSink {
 
 impl RerunSink {
     pub fn new(config: &VisualizerConfig) -> Result<Self> {
-        let builder = rerun::RecordingStreamBuilder::new("quanergy_client");
         let rec =
             match &config.output {
-                RerunOutput::Spawn => builder
-                    .spawn()
-                    .map_err(|error| VisualizerError::Rerun(error.to_string()))?,
-                RerunOutput::Connect(addr) => builder
-                    .connect_grpc_opts(normalize_connect_addr(addr))
-                    .map_err(|error| VisualizerError::Rerun(error.to_string()))?,
-                RerunOutput::Save(path) => builder
-                    .save(path)
-                    .map_err(|error| VisualizerError::Rerun(error.to_string()))?,
+                RerunOutput::Spawn(explicit_path) => {
+                    match spawn_viewer(explicit_path.as_deref()) {
+                        Ok(rec) => rec,
+                        Err(spawn_error) => {
+                            let fallback_path = default_fallback_path();
+                            warn!(
+                                "Failed to spawn Rerun Viewer ({}); \
+                                 falling back to save mode: {}",
+                                spawn_error,
+                                fallback_path.display()
+                            );
+                            eprintln!(
+                                "Warning: Rerun Viewer not found. \
+                                 Recording to {} instead.",
+                                fallback_path.display()
+                            );
+                            eprintln!(
+                                "Install the viewer or use --rerun-viewer-path to specify its location."
+                            );
+                            rerun::RecordingStreamBuilder::new("quanergy_client")
+                                .save(&fallback_path)
+                                .map_err(|e| VisualizerError::Rerun(e.to_string()))?
+                        }
+                    }
+                }
+                RerunOutput::Connect(addr) => {
+                    rerun::RecordingStreamBuilder::new("quanergy_client")
+                        .connect_grpc_opts(normalize_connect_addr(addr))
+                        .map_err(|error| VisualizerError::Rerun(error.to_string()))?
+                }
+                RerunOutput::Save(path) => {
+                    rerun::RecordingStreamBuilder::new("quanergy_client")
+                        .save(path)
+                        .map_err(|error| VisualizerError::Rerun(error.to_string()))?
+                }
             };
 
         Ok(Self {
@@ -97,6 +129,59 @@ impl VisualizerSink for RerunSink {
             .map_err(|error| VisualizerError::Rerun(error.to_string()))?;
         Ok(())
     }
+}
+
+/// Try to spawn the Rerun Viewer, checking the explicit path first,
+/// then the directory next to the current executable, then PATH.
+fn spawn_viewer(
+    explicit_path: Option<&Path>,
+) -> std::result::Result<rerun::RecordingStream, VisualizerError> {
+    let resolved = resolve_viewer_path(explicit_path);
+    let opts = rerun::SpawnOptions {
+        executable_path: resolved,
+        ..Default::default()
+    };
+    rerun::RecordingStreamBuilder::new("quanergy_client")
+        .spawn_opts(&opts)
+        .map_err(|error| VisualizerError::Rerun(error.to_string()))
+}
+
+/// Resolve the viewer executable path.
+///
+/// Priority:
+/// 1. Explicit `--rerun-viewer-path` from the user.
+/// 2. `<exe_dir>/rerun.exe` (Windows) or `<exe_dir>/rerun` if that file exists.
+/// 3. `None` — let the rerun crate search PATH.
+fn resolve_viewer_path(explicit_path: Option<&Path>) -> Option<String> {
+    if let Some(path) = explicit_path {
+        return Some(path.to_string_lossy().into_owned());
+    }
+    // Check next to the current executable.
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let neighbor = dir.join(rerun_exe_name());
+            if neighbor.is_file() {
+                return Some(neighbor.to_string_lossy().into_owned());
+            }
+        }
+    }
+    None
+}
+
+fn rerun_exe_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "rerun.exe"
+    } else {
+        "rerun"
+    }
+}
+
+fn default_fallback_path() -> PathBuf {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    PathBuf::from(format!("quanergy_{ts}.rrd"))
 }
 
 fn display_stride(point_count: usize, max_points: usize) -> usize {

@@ -31,7 +31,11 @@ pub enum VisualizerError {
     #[error("{0}")]
     Quanergy(#[from] QuanergyError),
 
-    #[error("visualizer error: {0}")]
+    #[error("visualizer error: {0}\n\
+        Use --rerun-save <FILE> to record an .rrd file for later viewing,\n\
+        --rerun-connect <ADDR> to connect to a running Rerun Viewer,\n\
+        --rerun-viewer-path <PATH> to specify the viewer executable location,\n\
+        or place rerun.exe next to visualizer.exe for automatic detection.")]
     Rerun(String),
 
     #[error("I/O error: {0}")]
@@ -101,6 +105,9 @@ struct RerunArgs {
 
     #[arg(long = "rerun-save")]
     rerun_save: Option<PathBuf>,
+
+    #[arg(long = "rerun-viewer-path")]
+    rerun_viewer_path: Option<PathBuf>,
 
     #[arg(long = "visualizer-max-points", default_value_t = 300_000)]
     visualizer_max_points: usize,
@@ -416,7 +423,7 @@ fn visualizer_config(args: &RerunArgs) -> VisualizerConfig {
     } else if let Some(addr) = &args.rerun_connect {
         RerunOutput::Connect(addr.clone())
     } else {
-        RerunOutput::Spawn
+        RerunOutput::Spawn(args.rerun_viewer_path.clone())
     };
     VisualizerConfig {
         output,
