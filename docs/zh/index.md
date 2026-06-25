@@ -15,16 +15,21 @@ Boost、VTK，以及 Linux/macOS 优先设计都不是当前里程碑目标。
 | `crates/quanergy-client` | 可复用 SDK 库，负责采集、协议、标定、帧、回放、坐标变换和存储。 |
 | `apps/visualizer` | 基于 Rerun 的实时/回放可视化程序和 qraw 录制程序。 |
 | `apps/capture-store` | 站点坐标系点云采集与回放存储程序，写入 `.qpcd` 帧和 SQLite 元数据。 |
+| `apps/tamping-analyzer` | 离线捣固锤高度测量工具，按 Y 轴位置分割点云并估算顶部 Z。 |
+| `apps/station-calibrate` | 刚体变换外参标定工具（Arun SVD 方法）。 |
 | `ref/quanergy_client` | 本地 C++ SDK 参考实现，用于协议和行为对齐。 |
 
 ## 常用命令
 
 ```powershell
 rtk just ci
-rtk cargo run -p visualizer -- live --host 192.0.2.10
+rtk cargo run -p visualizer -- live --host 192.0.2.10 --station-config config/station.toml
 rtk cargo run -p visualizer -- replay sample.qraw --rerun-save sample.rrd
-rtk cargo run -p capture-store -- live --host 192.0.2.10 --output-dir capture-output
-rtk cargo run -p capture-store -- replay sample.qraw --output-dir replay-output
+rtk cargo run -p capture-store -- --station-config config/station.toml live --host 192.0.2.10 --output-dir capture-output
+rtk cargo run -p capture-store -- --station-config config/station.toml replay sample.qraw --output-dir replay-output
+rtk cargo run -p capture-store -- validate-station-config config/station.example.toml
+rtk cargo run -p tamping-analyzer -- --database capture.sqlite --session-id <ID> --station-config config/station.toml -o results.csv
+rtk cargo run -p station-calibrate -- targets.csv --calibration-id my-calib -o station.toml
 ```
 
 ## 文档导航
@@ -33,3 +38,6 @@ rtk cargo run -p capture-store -- replay sample.qraw --output-dir replay-output
 - [实现细节](./implementation.md)：数据包、标定、帧、坐标变换和存储链路。
 - [Visualizer 使用说明](./visualizer.md)：实时可视化、回放、录制和 Rerun 输出。
 - [Capture Store 使用说明](./capture-store.md)：站点坐标系采集、回放存储、`.qpcd` 和 SQLite 元数据。
+- [站点坐标系规范](./station-coordinate-system.md)：右手坐标系定义、frame_id、变换约定。
+- [外参标定](./station-calibration.md)：Arun SVD 标定工具使用和几何复核流程。
+- [捣固锤分析器](./tamping-analyzer.md)：离线高度测量、CSV 输出、SQLite 表结构。

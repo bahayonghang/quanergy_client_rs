@@ -1,0 +1,17 @@
+[package]
+name = "station-calibrate"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Rigid-body extrinsic calibration for Quanergy tamping-station installations"
+license.workspace = true
+
+[dependencies]
+clap = { version = "4.6.1", features = ["derive"] }
+nalgebra = "0.33"
+quanergy-client = { path = "../../crates/quanergy-client" }
+serde = { version = "1.0", features = ["derive"] }
+
+[[bin]]
+name = "station-calibrate"
+path = "src/main.rs"
