@@ -3,6 +3,7 @@ members = [
     "crates/quanergy-client",
     "apps/capture-store",
     "apps/visualizer",
+    "apps/sensor-connect-test",
 ]
 resolver = "2"
 

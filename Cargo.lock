@@ -9246,6 +9246,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sensor-connect-test"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "quanergy-client",
+ "thiserror 2.0.18",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "seq-macro"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
