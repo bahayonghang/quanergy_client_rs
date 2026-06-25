@@ -1,0 +1,3 @@
+{"file":"AGENTS.md","reason":"Verify implementation remains within first-milestone scope and preserves reusable SDK boundaries."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify CLI default visualizer and replay visualizer smoke contracts after the split."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review library/app dependency and data-flow boundaries after reorganization."}

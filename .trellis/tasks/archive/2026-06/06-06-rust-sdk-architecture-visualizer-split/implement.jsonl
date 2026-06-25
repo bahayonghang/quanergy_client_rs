@@ -1,0 +1,5 @@
+{"file":"AGENTS.md","reason":"Project scope, first-milestone boundaries, reusable SDK guidance, and local RTK command rule."}
+{"file":"ref/refactor_plan.md","reason":"Technical direction for SDK rewrite modules, protocol pipeline, visualizer priority, and out-of-scope storage/measurement work."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"CLI default visualizer contract and replay visualizer smoke validation requirements."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Boundary analysis for library/app split and shared contract ownership."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Search-before-splitting and avoiding duplicated parser/app logic during reorganization."}
