@@ -2,7 +2,7 @@
 
 The `capture-store` app writes station-frame point clouds for downstream tools.
 It uses the same SDK pipeline as the visualizer, then applies a station
-coordinate transform and persists `.qpcd` files plus SQLite metadata.
+coordinate transform and persists standard PCD 0.7 files (`.pcd`) plus SQLite metadata.
 
 ## Live Capture
 
@@ -17,7 +17,7 @@ capture-store-output/
   capture.sqlite
   frames/
     <session-id>/
-      frame_000000000001.qpcd
+      frame_000000000001.pcd
 ```
 
 Use `--database` when the SQLite database should live outside the output

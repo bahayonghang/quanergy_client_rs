@@ -1,7 +1,7 @@
 # Capture Store 使用说明
 
 `capture-store` 应用用于写入供下游工具使用的站点坐标系点云。它使用与 visualizer 相同的
-SDK pipeline，然后应用站点坐标变换，并持久化 `.qpcd` 文件和 SQLite 元数据。
+SDK pipeline，然后应用站点坐标变换，并持久化标准 PCD 0.7 文件（`.pcd`）和 SQLite 元数据。
 
 ## 实时采集
 
@@ -16,7 +16,7 @@ capture-store-output/
   capture.sqlite
   frames/
     <session-id>/
-      frame_000000000001.qpcd
+      frame_000000000001.pcd
 ```
 
 如果希望 SQLite 数据库放在 output directory 外部，使用 `--database`：

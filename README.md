@@ -53,7 +53,7 @@ Workspace 当前包含 5 个 Rust 包：
 | `filters` | 距离过滤、ring/intensity 过滤等 pipeline 过滤能力。 |
 | `replay` | `.qraw` 读写、录制时间间隔保存、`.qraw.toml` sidecar 元数据。 |
 | `transform` | 站点坐标系变换。当前提供 yaw/pitch/roll pose 到 4x4 transform 的能力。 |
-| `storage` | `.qpcd` 点云帧读写和 SQLite 元数据存储。 |
+| `storage` | 标准 PCD 0.7 点云帧读写和 SQLite 元数据存储。旧 `.qpcd` 只读兼容。 |
 | `error` | 统一的 `QuanergyError` 和 `Result<T>`。 |
 
 ### 当前核心数据流
@@ -158,7 +158,7 @@ cargo run -p visualizer -- replay captures/session.qraw --rerun-save captures/se
 
 - 支持实时采集和 `.qraw` 回放。
 - 应用 yaw/pitch/roll + 平移配置得到站点坐标系点云。
-- 每帧写入一个 `.qpcd` 二进制点云文件。
+- 每帧写入一个标准 PCD 0.7 点云文件（`.pcd`）。
 - SQLite 保存 session、frame metadata、坐标变换、标定快照和 qraw 来源。
 - 实时模式使用有界存储队列，避免慢磁盘/数据库阻塞 packet ingestion。
 - 可选 `--record-raw` 同步保存原始 `.qraw`。
@@ -186,7 +186,7 @@ capture-store-output/
 ├── capture.sqlite
 └── frames/
     └── <session-id>/
-        └── frame_000000000001.qpcd
+        └── frame_000000000001.pcd
 ```
 
 如需把数据库放到其他位置：

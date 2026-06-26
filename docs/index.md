@@ -16,7 +16,7 @@ this milestone.
 | --- | --- |
 | `crates/quanergy-client` | Reusable SDK library for capture, protocol, calibration, frames, replay, transforms, and storage. |
 | `apps/visualizer` | Rerun-based live/replay visualizer and qraw recorder. |
-| `apps/capture-store` | Station-frame capture and replay storage app writing `.qpcd` frames plus SQLite metadata. |
+| `apps/capture-store` | Station-frame capture and replay storage app writing PCD 0.7 frames (`.pcd`) plus SQLite metadata. |
 | `ref/quanergy_client` | Local C++ SDK reference used for protocol and behavior parity. |
 
 ## Common Commands
@@ -34,4 +34,4 @@ rtk cargo run -p capture-store -- replay sample.qraw --output-dir replay-output
 - [Architecture](./architecture.md): workspace boundaries and current-vs-future scope.
 - [Implementation](./implementation.md): packet, calibration, frame, transform, and storage data flow.
 - [Visualizer](./visualizer.md): live visualization, replay, recording, and Rerun output.
-- [Capture Store](./capture-store.md): station-frame capture, replay storage, `.qpcd`, and SQLite metadata.
+- [Capture Store](./capture-store.md): station-frame capture, replay storage, PCD 0.7, and SQLite metadata.
