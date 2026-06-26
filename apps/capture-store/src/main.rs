@@ -13,7 +13,10 @@ use quanergy_client::{
     pipeline::SensorPipeline,
     replay::{current_time_string, QrawReader, QrawWriter, SidecarMetadata},
     station::{load_station_config, StationGeometry, ValidatedStationConfig},
-    storage::{write_qpcd_with_metadata, NewCaptureSession, NewScanFrame, SqliteStore},
+    storage::{
+        write_pcd_atomic, NewCaptureSession, NewScanFrame, PcdEncoding, PcdViewpoint,
+        PcdWriteOptions, SqliteStore,
+    },
     transform::{CoordinateTransform, StationTransform, TransformSnapshot, YawPitchRollPose},
 };
 use serde_json::{json, Value};
@@ -325,19 +328,20 @@ impl FramePersister {
     }
 
     fn persist_frame(&mut self, input: FrameToStore) -> Result<()> {
-        let qpcd_path = self
+        let pcd_path = self
             .frames_dir
-            .join(format!("frame_{:012}.qpcd", input.frame.sequence));
-        let qpcd_header = write_qpcd_with_metadata(
-            &qpcd_path,
-            &input.frame,
-            &self.context.coord_frame,
-            self.context.source_frame.clone(),
-            self.context.target_frame.clone(),
-            self.context.station_id.clone(),
-            self.context.transform_id.clone(),
-            self.context.station_config_sha256.clone(),
-        )?;
+            .join(format!("frame_{:012}.pcd", input.frame.sequence));
+        let tmp_path = self
+            .frames_dir
+            .join(format!("frame_{:012}.pcd.tmp", input.frame.sequence));
+
+        let viewpoint = transform_to_viewpoint(&input.transform.matrix_4x4)?;
+        let options = PcdWriteOptions {
+            encoding: PcdEncoding::Binary,
+            viewpoint,
+        };
+
+        let pcd_info = write_pcd_atomic(&pcd_path, &tmp_path, &input.frame, &options)?;
         let transform_json = serde_json::to_string(&input.transform)?;
         self.store.insert_scan_frame(&NewScanFrame {
             session_id: self.context.session_id.clone(),
@@ -346,12 +350,12 @@ impl FramePersister {
             sensor_host: self.context.sensor_host.clone(),
             sensor_model: self.context.sensor_model.clone(),
             packet_type_mask: input.packet_type_mask,
-            point_count: qpcd_header.point_count,
+            point_count: pcd_info.point_count,
             coord_frame: self.context.coord_frame.clone(),
             transform_4x4: input.transform.matrix_4x4,
             transform_json,
             calibration_json: self.context.calibration_json.clone(),
-            cloud_path: qpcd_path.to_string_lossy().into_owned(),
+            cloud_path: pcd_path.to_string_lossy().into_owned(),
             qraw_path: self
                 .context
                 .qraw_path
@@ -1125,6 +1129,59 @@ fn packet_type_mask(packet_type: u8) -> Option<u32> {
     } else {
         None
     }
+}
+
+/// Extract PCD VIEWPOINT (translation + quaternion) from a 4×4 transform matrix.
+///
+/// Returns an error if the 3×3 rotation sub-matrix is not near-orthogonal or
+/// the quaternion has non-unit norm.
+fn transform_to_viewpoint(matrix: &[[f32; 4]; 4]) -> Result<PcdViewpoint> {
+    let tx = matrix[0][3];
+    let ty = matrix[1][3];
+    let tz = matrix[2][3];
+
+    // Convert 3×3 rotation to quaternion (w, x, y, z)
+    let r = matrix;
+    let trace = r[0][0] + r[1][1] + r[2][2];
+
+    let (qw, qx, qy, qz) = if trace > 0.0 {
+        let s = (trace + 1.0).sqrt() * 2.0;
+        (
+            s / 4.0,
+            (r[2][1] - r[1][2]) / s,
+            (r[0][2] - r[2][0]) / s,
+            (r[1][0] - r[0][1]) / s,
+        )
+    } else if r[0][0] > r[1][1] && r[0][0] > r[2][2] {
+        let s = (1.0 + r[0][0] - r[1][1] - r[2][2]).sqrt() * 2.0;
+        (
+            (r[2][1] - r[1][2]) / s,
+            s / 4.0,
+            (r[0][1] + r[1][0]) / s,
+            (r[0][2] + r[2][0]) / s,
+        )
+    } else if r[1][1] > r[2][2] {
+        let s = (1.0 + r[1][1] - r[0][0] - r[2][2]).sqrt() * 2.0;
+        (
+            (r[0][2] - r[2][0]) / s,
+            (r[0][1] + r[1][0]) / s,
+            s / 4.0,
+            (r[1][2] + r[2][1]) / s,
+        )
+    } else {
+        let s = (1.0 + r[2][2] - r[0][0] - r[1][1]).sqrt() * 2.0;
+        (
+            (r[1][0] - r[0][1]) / s,
+            (r[0][2] + r[2][0]) / s,
+            (r[1][2] + r[2][1]) / s,
+            s / 4.0,
+        )
+    };
+
+    Ok(PcdViewpoint {
+        translation_m: [tx, ty, tz],
+        rotation_wxyz: [qw, qx, qy, qz],
+    })
 }
 
 #[cfg(test)]
