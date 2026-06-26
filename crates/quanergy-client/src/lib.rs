@@ -10,10 +10,12 @@ pub mod cloud;
 pub mod config;
 pub mod error;
 pub mod filters;
+pub mod measure;
 pub mod net;
 pub mod pipeline;
 pub mod protocol;
 pub mod replay;
+pub mod station;
 pub mod storage;
 pub mod transform;
 

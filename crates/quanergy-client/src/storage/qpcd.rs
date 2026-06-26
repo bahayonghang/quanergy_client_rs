@@ -27,6 +27,17 @@ pub struct QpcdHeader {
     pub width: usize,
     pub height: usize,
     pub is_dense: bool,
+    // --- v2 provenance fields (all optional for backward compat) ---
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_frame: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_frame: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub station_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transform_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub station_config_sha256: Option<String>,
 }
 
 impl QpcdHeader {
@@ -42,6 +53,31 @@ impl QpcdHeader {
             width: frame.width,
             height: frame.height,
             is_dense: frame.is_dense,
+            source_frame: None,
+            target_frame: None,
+            station_id: None,
+            transform_id: None,
+            station_config_sha256: None,
+        }
+    }
+
+    /// Create a header with provenance metadata.
+    pub fn from_frame_with_provenance(
+        frame: &Frame<PointXyzir>,
+        coord_frame: impl Into<String>,
+        source_frame: Option<String>,
+        target_frame: Option<String>,
+        station_id: Option<String>,
+        transform_id: Option<String>,
+        station_config_sha256: Option<String>,
+    ) -> Self {
+        Self {
+            source_frame,
+            target_frame,
+            station_id,
+            transform_id,
+            station_config_sha256,
+            ..Self::from_frame(frame, coord_frame)
         }
     }
 }
@@ -54,6 +90,50 @@ pub fn write_qpcd(
     let path = path.as_ref();
     create_parent_dir(path)?;
     let header = QpcdHeader::from_frame(frame, coord_frame);
+    let tmp_path = tmp_path(path);
+    {
+        let mut writer = BufWriter::new(File::create(&tmp_path)?);
+        write_qpcd_to_writer(&mut writer, &header, &frame.points)?;
+        writer.flush()?;
+    }
+    match fs::rename(&tmp_path, path) {
+        Ok(()) => {}
+        Err(error) if path.exists() => {
+            fs::remove_file(path)?;
+            fs::rename(&tmp_path, path).map_err(|_| error)?;
+        }
+        Err(error) => return Err(error.into()),
+    }
+    Ok(header)
+}
+
+/// Write a QPCD file with full provenance metadata.
+///
+/// The `source_frame`, `target_frame`, `station_id`, `transform_id`,
+/// and `station_config_sha256` fields are recorded in the JSON header
+/// for auditability. Old readers will ignore these optional fields.
+#[allow(clippy::too_many_arguments)]
+pub fn write_qpcd_with_metadata(
+    path: impl AsRef<Path>,
+    frame: &Frame<PointXyzir>,
+    coord_frame: impl Into<String>,
+    source_frame: Option<String>,
+    target_frame: Option<String>,
+    station_id: Option<String>,
+    transform_id: Option<String>,
+    station_config_sha256: Option<String>,
+) -> Result<QpcdHeader> {
+    let path = path.as_ref();
+    create_parent_dir(path)?;
+    let header = QpcdHeader::from_frame_with_provenance(
+        frame,
+        coord_frame,
+        source_frame,
+        target_frame,
+        station_id,
+        transform_id,
+        station_config_sha256,
+    );
     let tmp_path = tmp_path(path);
     {
         let mut writer = BufWriter::new(File::create(&tmp_path)?);

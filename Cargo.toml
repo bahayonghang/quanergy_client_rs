@@ -4,6 +4,8 @@ members = [
     "apps/capture-store",
     "apps/visualizer",
     "apps/sensor-connect-test",
+    "apps/tamping-analyzer",
+    "apps/station-calibrate",
 ]
 resolver = "2"
 

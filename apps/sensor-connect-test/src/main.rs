@@ -209,9 +209,7 @@ fn run(host: &str, port: u16, max_frames: u64, max_points_per_frame: usize) -> R
 
         debug!(
             "[packet #{}] type=0x{:02x} size={}",
-            stats.packets_received,
-            packet.header.packet_type,
-            packet.header.size
+            stats.packets_received, packet.header.packet_type, packet.header.size
         );
 
         let frames = match pipeline.process_raw(&packet) {
@@ -266,12 +264,19 @@ fn print_frame(frame: &Frame<PointXyzir>, index: u64, max_points: usize) {
         "  {:<4} {:>10} {:>10} {:>10} {:>10} {:>6}",
         "#", "x", "y", "z", "intensity", "ring"
     );
-    println!("  {:<4} {:>10} {:>10} {:>10} {:>10} {:>6}", "───", "──", "──", "──", "────", "──");
+    println!(
+        "  {:<4} {:>10} {:>10} {:>10} {:>10} {:>6}",
+        "───", "──", "──", "──", "────", "──"
+    );
 
     let count = max_points.min(frame.points.len());
     for (i, p) in frame.points.iter().take(count).enumerate() {
         let (x, y, z) = if p.x.is_nan() {
-            ("   NaN".to_owned(), "   NaN".to_owned(), "   NaN".to_owned())
+            (
+                "   NaN".to_owned(),
+                "   NaN".to_owned(),
+                "   NaN".to_owned(),
+            )
         } else {
             (
                 format!("{:>10.3}", p.x),
@@ -312,7 +317,10 @@ fn print_stats(stats: &CaptureStats) {
     let good = stats.packets_received.saturating_sub(stats.bad_packets);
     println!("  Good packets:      {good}");
     if stats.warmup_errors > 0 {
-        println!("  Warm-up timeouts:  {}  (传感器启动期间正常)", stats.warmup_errors);
+        println!(
+            "  Warm-up timeouts:  {}  (传感器启动期间正常)",
+            stats.warmup_errors
+        );
     }
     if stats.packets_received > 0 {
         let pct = good as f64 / stats.packets_received as f64 * 100.0;

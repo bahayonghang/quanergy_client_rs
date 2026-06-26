@@ -185,3 +185,150 @@ fn snapshot_includes_pose_fields_and_matrix() {
     assert_eq!(snapshot.config["roll_deg"], json!(6.0));
     assert_eq!(snapshot.matrix_4x4, transform.matrix_4x4());
 }
+
+// ---------------------------------------------------------------------------
+// StationTransform tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn station_transform_sets_target_frame_id() {
+    let transform = StationTransform::new(
+        "quanergy_sensor",
+        "station",
+        "test-xform",
+        [
+            [1.0, 0.0, 0.0, 0.20],
+            [0.0, -1.0, 0.0, 0.68],
+            [0.0, 0.0, -1.0, 7.85],
+            [0.0, 0.0, 0.0, 1.00],
+        ],
+    );
+
+    let frame = Frame {
+        stamp_micros: 123,
+        sequence: 9,
+        frame_id: "quanergy_sensor".to_owned(),
+        width: 1,
+        height: 1,
+        is_dense: true,
+        points: vec![point(1.0, 0.0, 0.0)],
+    };
+
+    let output = transform.transform_frame_to_target(&frame);
+
+    assert_eq!(output.frame_id, "station");
+    assert_eq!(output.stamp_micros, 123);
+    assert_eq!(output.sequence, 9);
+    assert_eq!(output.width, 1);
+    assert_eq!(output.height, 1);
+    assert!(output.is_dense);
+}
+
+#[test]
+fn station_transform_preserves_intensity_and_ring() {
+    let transform = StationTransform::new(
+        "sensor",
+        "station",
+        "test",
+        [
+            [1.0, 0.0, 0.0, 10.0],
+            [0.0, 1.0, 0.0, 20.0],
+            [0.0, 0.0, 1.0, 30.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    );
+
+    let input = PointXyzir {
+        x: 1.0,
+        y: 2.0,
+        z: 3.0,
+        intensity: 255.0,
+        ring: 8,
+    };
+
+    let output = transform.transform_point(input);
+    assert_eq!(output.intensity, 255.0);
+    assert_eq!(output.ring, 8);
+    assert_close(output.x, 11.0);
+    assert_close(output.y, 22.0);
+    assert_close(output.z, 33.0);
+}
+
+#[test]
+fn station_transform_snapshot_includes_frame_provenance() {
+    let transform = StationTransform::new(
+        "quanergy_sensor",
+        "station",
+        "extrinsic-001",
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    );
+
+    let snapshot = transform.snapshot();
+    assert_eq!(snapshot.config["source_frame"], json!("quanergy_sensor"));
+    assert_eq!(snapshot.config["target_frame"], json!("station"));
+    assert_eq!(snapshot.config["transform_id"], json!("extrinsic-001"));
+}
+
+#[test]
+fn station_transform_candidate_downward_matrix() {
+    // From plan §4.4
+    let transform = StationTransform::new(
+        "quanergy_sensor",
+        "station",
+        "candidate",
+        [
+            [1.0, 0.0, 0.0, 0.20],
+            [0.0, -1.0, 0.0, 0.68],
+            [0.0, 0.0, -1.0, 7.85],
+            [0.0, 0.0, 0.0, 1.00],
+        ],
+    );
+
+    // sensor origin -> station (0.20, 0.68, 7.85)
+    let origin = transform.transform_point(point(0.0, 0.0, 0.0));
+    assert_close(origin.x, 0.20);
+    assert_close(origin.y, 0.68);
+    assert_close(origin.z, 7.85);
+
+    // sensor +X -> station +X
+    let px = transform.transform_point(point(1.0, 0.0, 0.0));
+    assert_close(px.x, 1.20);
+    assert_close(px.y, 0.68);
+    assert_close(px.z, 7.85);
+
+    // sensor +Y -> station -Y
+    let py = transform.transform_point(point(0.0, 1.0, 0.0));
+    assert_close(py.x, 0.20);
+    assert_close(py.y, -0.32); // 0.68 - 1.0
+    assert_close(py.z, 7.85);
+
+    // sensor +Z -> station -Z
+    let pz = transform.transform_point(point(0.0, 0.0, 1.0));
+    assert_close(pz.x, 0.20);
+    assert_close(pz.y, 0.68);
+    assert_close(pz.z, 6.85); // 7.85 - 1.0
+}
+
+#[test]
+fn station_transform_accessors() {
+    let transform = StationTransform::new(
+        "src",
+        "dst",
+        "xform-42",
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    );
+
+    assert_eq!(transform.source_frame(), "src");
+    assert_eq!(transform.target_frame(), "dst");
+    assert_eq!(transform.transform_id(), "xform-42");
+}

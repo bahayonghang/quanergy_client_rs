@@ -13,6 +13,8 @@ use quanergy_client::{
     net::{fetch_device_info_xml, TcpPacketSource},
     pipeline::SensorPipeline,
     replay::{QrawReader, QrawWriter, SidecarMetadata},
+    station::{load_station_config, StationGeometry},
+    transform::StationTransform,
 };
 use thiserror::Error;
 use tracing::warn;
@@ -31,11 +33,13 @@ pub enum VisualizerError {
     #[error("{0}")]
     Quanergy(#[from] QuanergyError),
 
-    #[error("visualizer error: {0}\n\
+    #[error(
+        "visualizer error: {0}\n\
         Use --rerun-save <FILE> to record an .rrd file for later viewing,\n\
         --rerun-connect <ADDR> to connect to a running Rerun Viewer,\n\
         --rerun-viewer-path <PATH> to specify the viewer executable location,\n\
-        or place rerun.exe next to visualizer.exe for automatic detection.")]
+        or place rerun.exe next to visualizer.exe for automatic detection."
+    )]
     Rerun(String),
 
     #[error("I/O error: {0}")]
@@ -111,6 +115,18 @@ struct RerunArgs {
 
     #[arg(long = "visualizer-max-points", default_value_t = 300_000)]
     visualizer_max_points: usize,
+
+    /// Path to a station.toml for station-frame visualization.
+    #[arg(long = "station-config")]
+    station_config: Option<PathBuf>,
+
+    /// Also show the raw sensor-frame point cloud alongside the station frame.
+    #[arg(long = "show-sensor-frame")]
+    show_sensor_frame: bool,
+
+    /// Show hammer ROI boxes and centres.
+    #[arg(long = "show-hammer-rois")]
+    show_hammer_rois: bool,
 }
 
 #[derive(Debug, Args)]
@@ -237,6 +253,31 @@ fn run(cli: Cli) -> Result<()> {
     }
 }
 
+struct StationContext {
+    transform: StationTransform,
+    geometry: StationGeometry,
+}
+
+fn load_station_ctx(path: Option<&Path>) -> Result<Option<StationContext>> {
+    let path = match path {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+    let cfg = load_station_config(path)
+        .map_err(|e| QuanergyError::Config(format!("station config error: {e}")))?;
+    let geometry = StationGeometry::from_config(&cfg);
+    let transform = StationTransform::new(
+        &cfg.source_frame,
+        &cfg.target_frame,
+        &cfg.extrinsic_id,
+        cfg.sensor_to_station,
+    );
+    Ok(Some(StationContext {
+        transform,
+        geometry,
+    }))
+}
+
 fn init_logging(verbose: bool) {
     let default = if verbose { "debug" } else { "info" };
     let _ = tracing_subscriber::fmt()
@@ -262,13 +303,33 @@ fn run_visualizer_live(args: LiveVisualizerArgs, strict: bool) -> Result<()> {
         None
     };
 
+    let station_ctx = load_station_ctx(args.rerun.station_config.as_deref())?;
+
+    // Log static station scene once
+    if let Some(ref ctx) = station_ctx {
+        sink.log_static_station(&ctx.geometry)?;
+    }
+
     loop {
         let packet = source.next_packet()?;
         if let Some(writer) = &mut recorder {
             writer.write_packet(packet.arrival_delta_ns, &packet.bytes)?;
         }
         for frame in pipeline.process_raw(&packet)? {
-            sink.log_frame(&frame)?;
+            if let Some(ref ctx) = station_ctx {
+                let station_frame = ctx.transform.transform_frame_to_target(&frame);
+                RerunSink::log_frame_to_entity(
+                    &sink.rec,
+                    &ctx.geometry.target_frame,
+                    &station_frame,
+                    sink.max_points,
+                )?;
+                if args.rerun.show_sensor_frame {
+                    sink.log_frame(&frame)?;
+                }
+            } else {
+                sink.log_frame(&frame)?;
+            }
         }
     }
 }
@@ -287,12 +348,32 @@ fn run_visualizer_replay(args: ReplayVisualizerArgs, strict: bool) -> Result<()>
     let mut reader = QrawReader::open(&args.input)?;
     let mut pipeline = SensorPipeline::new(config)?;
     let mut sink = RerunSink::new(&visualizer_config(&args.rerun))?;
+
+    let station_ctx = load_station_ctx(args.rerun.station_config.as_deref())?;
+
+    if let Some(ref ctx) = station_ctx {
+        sink.log_static_station(&ctx.geometry)?;
+    }
+
     while let Some(packet) = reader.next_packet()? {
         if args.realtime && packet.arrival_delta_ns > 0 {
             std::thread::sleep(Duration::from_nanos(packet.arrival_delta_ns));
         }
         for frame in pipeline.process_raw(&packet)? {
-            sink.log_frame(&frame)?;
+            if let Some(ref ctx) = station_ctx {
+                let station_frame = ctx.transform.transform_frame_to_target(&frame);
+                RerunSink::log_frame_to_entity(
+                    &sink.rec,
+                    &ctx.geometry.target_frame,
+                    &station_frame,
+                    sink.max_points,
+                )?;
+                if args.rerun.show_sensor_frame {
+                    sink.log_frame(&frame)?;
+                }
+            } else {
+                sink.log_frame(&frame)?;
+            }
         }
     }
     Ok(())

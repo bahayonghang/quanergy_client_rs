@@ -86,6 +86,12 @@ fn sqlite_insert_read_points_to_readable_qpcd() {
             sdk_version: env!("CARGO_PKG_VERSION").to_owned(),
             status: "running".to_owned(),
             notes: Some("first pass".to_owned()),
+            station_id: None,
+            source_frame: None,
+            target_frame: None,
+            transform_id: None,
+            station_config_json: None,
+            station_config_sha256: None,
         })
         .unwrap();
     let frame_id = store
@@ -105,6 +111,8 @@ fn sqlite_insert_read_points_to_readable_qpcd() {
             qraw_path: None,
             status: "complete".to_owned(),
             created_at: now.clone(),
+            source_frame: None,
+            target_frame: None,
         })
         .unwrap();
 

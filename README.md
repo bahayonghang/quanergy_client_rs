@@ -12,20 +12,26 @@ quanergy_client_rs/
 │   └── quanergy-client/      # 可复用 Rust SDK 库
 ├── apps/
 │   ├── visualizer/           # 实时/回放点云可视化与 qraw 录制
-│   └── capture-store/        # 站点坐标系点云采集、回放和持久化
-├── docs/                     # VitePress 文档站内容
+│   ├── capture-store/        # 站点坐标系点云采集、回放和持久化
+│   ├── tamping-analyzer/     # 离线捣固锤高度测量与分析
+│   └── station-calibrate/    # 刚体变换外参标定（Arun SVD）
+├── config/
+│   └── station.example.toml  # 站点配置模板
+├── docs/                     # 文档站内容
 ├── ref/                      # C++ SDK 参考实现与重写计划
 ├── Cargo.toml                # Rust workspace
 └── justfile                  # 常用构建、测试、文档命令
 ```
 
-Workspace 当前包含 3 个 Rust 包：
+Workspace 当前包含 5 个 Rust 包：
 
 | 包 | 路径 | 类型 | 作用 |
 | --- | --- | --- | --- |
-| `quanergy-client` | `crates/quanergy-client` | library | SDK 核心库，提供协议、采集、解析、标定、转换、回放和存储 API。 |
-| `visualizer` | `apps/visualizer` | library + binary | 基于 `quanergy-client` 和 Rerun 的实时/离线点云查看器，也可录制 `.qraw`。 |
-| `capture-store` | `apps/capture-store` | binary | 把实时或回放点云转换到站点坐标系，并写入 `.qpcd` 帧和 SQLite 元数据。 |
+| `quanergy-client` | `crates/quanergy-client` | library | SDK 核心库，提供协议、采集、解析、标定、转换、回放、站点配置、测量和存储 API。 |
+| `visualizer` | `apps/visualizer` | library + binary | 基于 Rerun 的实时/离线点云查看器，支持站点坐标显示和 hammer ROI。 |
+| `capture-store` | `apps/capture-store` | binary | 实时/回放点云的站点坐标转换、QPCD 存储和 SQLite 元数据。 |
+| `tamping-analyzer` | `apps/tamping-analyzer` | binary | 离线捣固锤高度测量，ROI 分割，CSV 导出。 |
+| `station-calibrate` | `apps/station-calibrate` | binary | 刚体变换外参标定（Arun SVD），CSV 输入，TOML 输出。 |
 
 ## `quanergy-client` SDK 库结构
 
