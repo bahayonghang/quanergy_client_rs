@@ -238,3 +238,39 @@ Filled backend error-handling, logging, and quality guidelines from real codebas
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: PCD 点云存储迁移 — 阶段 1-5 实施
+
+**Date**: 2026-06-26
+**Task**: PCD 点云存储迁移 — 阶段 1-5 实施
+**Branch**: `docs/pcd-storage-database-plan`
+
+### Summary
+
+完成 PCD 0.7 存储迁移全部 5 个实施阶段：spike 验证 pcd-rs、新增 storage/pcd.rs codec、切换 capture-store 默认输出、声明 ScanFrameMetadataStore trait、废弃 QPCD writer 并更新全部文档
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7c6c86e` | (see git log) |
+| `5d8cffc` | (see git log) |
+| `ea6837b` | (see git log) |
+| `d4974f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
-- **Last Active**: 2026-06-25
+- **Total Sessions**: 8
+- **Last Active**: 2026-06-26
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~240 | Active |
+| `journal-1.md` | ~276 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-06-26 | PCD 点云存储迁移 — 阶段 1-5 实施 | `7c6c86e`, `5d8cffc`, `ea6837b`, `d4974f9` | `docs/pcd-storage-database-plan` |
 | 7 | 2026-06-25 | Bootstrap project development guidelines | `408281f` | `main` |
 | 6 | 2026-06-06 | VitePress Docs | `b3ef012` | `main` |
 | 5 | 2026-06-06 | Tamping station point cloud storage | `8004941` | `main` |
