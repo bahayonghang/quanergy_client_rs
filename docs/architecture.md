@@ -32,7 +32,7 @@ Quanergy sensor or qraw file
 | `cloud` | Defines `Frame`, `PointHvdir`, and `PointXyzir`, including HVDIR-to-XYZIR conversion. |
 | `replay` | Reads and writes `.qraw` packets plus `.qraw.toml` calibration sidecars. |
 | `transform` | Applies station-frame coordinate transforms through a reusable transform interface. |
-| `storage` | Writes and reads `.qpcd` files and SQLite metadata. |
+| `storage` | Writes and reads standard PCD 0.7 files and SQLite metadata. Legacy `.qpcd` reader retained for migration. |
 
 ## Current Scope
 
@@ -45,7 +45,7 @@ Implemented first-milestone and near-term storage behavior includes:
 - Manual and automatic encoder calibration.
 - HVDIR-to-XYZIR conversion and reusable frame types.
 - Rerun visualization through the `visualizer` app.
-- Station-frame transforms, `.qpcd` binary frame files, and SQLite metadata through the SDK and `capture-store` app.
+- Station-frame transforms, PCD 0.7 binary frame files, and SQLite metadata through the SDK and `capture-store` app.
 
 ## Future Business Work
 

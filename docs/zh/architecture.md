@@ -31,7 +31,7 @@ Quanergy 传感器或 qraw 文件
 | `cloud` | 定义 `Frame`、`PointHvdir` 和 `PointXyzir`，包含 HVDIR 到 XYZIR 转换。 |
 | `replay` | 读写 `.qraw` 数据包和 `.qraw.toml` 标定 sidecar。 |
 | `transform` | 通过可复用坐标变换接口应用站点坐标变换。 |
-| `storage` | 读写 `.qpcd` 文件和 SQLite 元数据。 |
+| `storage` | 读写标准 PCD 0.7 文件和 SQLite 元数据。旧 `.qpcd` 只读兼容。 |
 
 ## 当前范围
 
@@ -44,7 +44,7 @@ Quanergy 传感器或 qraw 文件
 - 手动和自动 encoder calibration。
 - HVDIR 到 XYZIR 转换和可复用帧类型。
 - `visualizer` 应用中的 Rerun 可视化。
-- SDK 和 `capture-store` 应用中的站点坐标变换、`.qpcd` 二进制帧文件和 SQLite 元数据。
+- SDK 和 `capture-store` 应用中的站点坐标变换、PCD 0.7 二进制帧文件和 SQLite 元数据。旧 `.qpcd` 仅作迁移用只读兼容。
 
 ## 后续业务工作
 

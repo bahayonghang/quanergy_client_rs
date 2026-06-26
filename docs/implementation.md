@@ -86,7 +86,7 @@ the default pose transform without rewriting capture or storage orchestration.
 
 ## Point-Cloud Storage
 
-Production storage uses one binary `.qpcd` file per completed frame. A `.qpcd`
+Production storage uses one standard PCD 0.7 `.pcd` file per completed frame. A `.pcd`
 file starts with magic `QPCDv1`, a JSON header, and repeated 20-byte XYZIR point
 records:
 
@@ -99,7 +99,7 @@ ring: u16
 flags: u16
 ```
 
-Files are written through a temporary path and renamed to the final `.qpcd`
+Files are written through a temporary path and renamed to the final `.pcd`
 path after the write completes.
 
 ## SQLite Metadata
@@ -109,7 +109,7 @@ path after the write completes.
 | Table | Purpose |
 | --- | --- |
 | `capture_session` | Session identity, start/end time, sensor host/model, SDK version, status, and notes. |
-| `scan_frame` | Frame sequence, timestamp, point count, coordinate frame, transform snapshot, calibration snapshot, `.qpcd` path, optional qraw path, and status. |
+| `scan_frame` | Frame sequence, timestamp, point count, coordinate frame, transform snapshot, calibration snapshot, `.pcd` path, optional qraw path, and status. |
 
 Per-point SQL rows are deliberately avoided. Downstream tools should enumerate
-frames from SQLite, then read the referenced `.qpcd` files.
+frames from SQLite, then read the referenced `.pcd` files.

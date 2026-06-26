@@ -82,6 +82,10 @@ impl QpcdHeader {
     }
 }
 
+#[deprecated(
+    since = "0.2.0",
+    note = "use storage::write_pcd instead; QPCD is superseded by PCD 0.7"
+)]
 pub fn write_qpcd(
     path: impl AsRef<Path>,
     frame: &Frame<PointXyzir>,
@@ -113,6 +117,10 @@ pub fn write_qpcd(
 /// and `station_config_sha256` fields are recorded in the JSON header
 /// for auditability. Old readers will ignore these optional fields.
 #[allow(clippy::too_many_arguments)]
+#[deprecated(
+    since = "0.2.0",
+    note = "use storage::write_pcd instead; QPCD is superseded by PCD 0.7"
+)]
 pub fn write_qpcd_with_metadata(
     path: impl AsRef<Path>,
     frame: &Frame<PointXyzir>,

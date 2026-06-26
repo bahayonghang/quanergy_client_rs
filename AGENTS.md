@@ -76,8 +76,9 @@ pipeline, calibration, or visualization logic lives.
   including calculate/apply behavior equivalent to the C++ SDK.
 - Frame assembly matters. Do not treat each TCP packet as a complete scan unless
   the current task explicitly chooses a packet-level debug mode.
-- For storage, prefer one binary point-cloud file per frame plus database
-  metadata/results. Avoid one database row per point in production paths.
+- For storage, prefer one standard PCD 0.7 (`.pcd`) point-cloud file per frame plus
+  database metadata/results. Legacy `.qpcd` reader kept for migration. Avoid one
+  database row per point in production paths.
 
 # Rust Architecture Guidance
 
@@ -89,7 +90,7 @@ protocol/     packet header and packet-type parsers
 calibration/  deviceInfo, vertical angles, encoder correction
 cloud/        HVDIR, XYZIR, frames
 convert/      polar-to-cartesian and station transforms
-storage/      qpcd/bin, optional PCD debug export, metadata database
+storage/      pcd/bin, legacy qpcd reader, metadata database
 measure/      ROI processing and tamping-hammer height extraction
 ```
 
